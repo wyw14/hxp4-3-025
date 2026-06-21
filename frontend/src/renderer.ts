@@ -384,6 +384,71 @@ export class Renderer {
     }
   }
 
+  drawHintArea(pos: ScreenPoint, time: number): void {
+    const baseRadius = 130;
+    const pulse = 0.85 + Math.sin(time * 2.5) * 0.15;
+    const radius = Math.max(1, baseRadius * pulse);
+
+    const glow = this.ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, radius);
+    glow.addColorStop(0, 'rgba(120, 200, 255, 0)');
+    glow.addColorStop(0.65, 'rgba(120, 200, 255, 0.04)');
+    glow.addColorStop(0.92, 'rgba(120, 200, 255, 0.16)');
+    glow.addColorStop(1, 'rgba(120, 200, 255, 0)');
+    this.ctx.fillStyle = glow;
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    this.ctx.strokeStyle = `rgba(140, 210, 255, ${0.35 + Math.sin(time * 3) * 0.2})`;
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([10, 8]);
+    this.ctx.lineDashOffset = -time * 22;
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+  }
+
+  drawHintEndpoints(fromPos: ScreenPoint, toPos: ScreenPoint, time: number): void {
+    this.ctx.beginPath();
+    this.ctx.moveTo(fromPos.x, fromPos.y);
+    this.ctx.lineTo(toPos.x, toPos.y);
+    this.ctx.strokeStyle = `rgba(255, 225, 120, ${0.25 + Math.sin(time * 3) * 0.15})`;
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([6, 10]);
+    this.ctx.lineDashOffset = -time * 30;
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    for (const pos of [fromPos, toPos]) {
+      const pulse = 0.8 + Math.sin(time * 4) * 0.2;
+      const ringR = Math.max(1, 22 * pulse);
+
+      const glow = this.ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, ringR * 2.2);
+      glow.addColorStop(0, 'rgba(255, 230, 120, 0.28)');
+      glow.addColorStop(1, 'rgba(255, 230, 120, 0)');
+      this.ctx.fillStyle = glow;
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, ringR * 2.2, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, ringR, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(255, 230, 120, ${0.6 + Math.sin(time * 4) * 0.2})`;
+      this.ctx.lineWidth = 2.5;
+      this.ctx.stroke();
+
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, ringR * 1.6, 0, Math.PI * 2);
+      this.ctx.strokeStyle = `rgba(255, 230, 120, ${0.25 + Math.sin(time * 4 + 1) * 0.1})`;
+      this.ctx.lineWidth = 1.5;
+      this.ctx.setLineDash([4, 6]);
+      this.ctx.lineDashOffset = -time * 18;
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+    }
+  }
+
   beginFrame(): void {
     this.clear();
   }

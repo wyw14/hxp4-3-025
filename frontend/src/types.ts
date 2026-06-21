@@ -66,6 +66,17 @@ export interface DrawState {
   lastSampleTime: number;
 }
 
+export interface HintTargetEdge {
+  from: string;
+  to: string;
+}
+
+export interface HintState {
+  tier: number;
+  startAnchorId: string | null;
+  targetEdge: HintTargetEdge | null;
+}
+
 export interface GameState {
   currentLevel: number;
   levelData: LevelData | null;
@@ -77,6 +88,8 @@ export interface GameState {
   showFrequencies: boolean;
   isComplete: boolean;
   snapTargetId: string | null;
+  consecutiveFailures: number;
+  hint: HintState;
 }
 
 export interface VerifyResult {

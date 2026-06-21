@@ -1,5 +1,5 @@
 import { Game } from './game';
-import type { LevelData } from './types';
+import type { LevelData, HintState } from './types';
 import { healthCheck } from './api';
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -40,20 +40,38 @@ game.setCallbacks({
     const pct = total > 0 ? (current / total) * 100 : 0;
     progressFillEl.style.width = `${pct}%`;
 
-    if (current < total) {
-      if (current === 0) {
-        hintTitleEl.textContent = '观察星空';
-        hintTextEl.textContent = '仔细观察星星的闪烁节奏，找到频率相同或成倍数的恒星';
-      } else if (current < total * 0.3) {
-        hintTitleEl.textContent = '初见端倪';
-        hintTextEl.textContent = '做得好！继续寻找，你会发现恒星间的谐波共振关系';
-      } else if (current < total * 0.6) {
-        hintTitleEl.textContent = '星脉初现';
-        hintTextEl.textContent = '神话生物的轮廓正在浮现，耐心连接剩余的星脉';
-      } else if (current < total) {
-        hintTitleEl.textContent = '即将完成';
-        hintTextEl.textContent = '只剩最后几颗星了！神话生物即将显现';
-      }
+    if (current >= total) {
+      hintTitleEl.textContent = '星座即将显现';
+      hintTextEl.textContent = '所有星脉已连接，神话生物正在凝聚光辉...';
+    } else if (current === 0) {
+      hintTitleEl.textContent = '观察星空';
+      hintTextEl.textContent = '仔细观察星星的闪烁节奏，找到频率相同或成倍数的恒星';
+    } else if (current < total * 0.3) {
+      hintTitleEl.textContent = '初见端倪';
+      hintTextEl.textContent = '做得好！继续寻找，你会发现恒星间的谐波共振关系';
+    } else if (current < total * 0.6) {
+      hintTitleEl.textContent = '星脉初现';
+      hintTextEl.textContent = '神话生物的轮廓正在浮现，耐心连接剩余的星脉';
+    } else if (current < total) {
+      hintTitleEl.textContent = '即将完成';
+      hintTextEl.textContent = '只剩最后几颗星了！神话生物即将显现';
+    }
+  },
+  onHintChange: (hint: HintState) => {
+    if (hint.tier === 0) {
+      hintTitleEl.textContent = '继续探索';
+      hintTextEl.textContent = '很好，继续寻找频率成倍数关系的恒星';
+      return;
+    }
+    if (hint.tier === 1) {
+      hintTitleEl.textContent = '方向提示';
+      hintTextEl.textContent = '注意恒星闪烁的频率——只有频率成简单倍数（如 1:2、2:3）的恒星之间才能连成星脉';
+    } else if (hint.tier === 2) {
+      hintTitleEl.textContent = '区域提示';
+      hintTextEl.textContent = '已高亮你起点附近的区域，仔细观察这片区域里恒星的频率与节奏';
+    } else {
+      hintTitleEl.textContent = '星脉提示';
+      hintTextEl.textContent = '已标出一条未完成的星脉：连接两个高亮端点即可继续';
     }
   },
   onComplete: (desc: string) => {

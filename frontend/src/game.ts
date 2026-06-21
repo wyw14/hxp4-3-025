@@ -6,7 +6,9 @@ import type {
   ScreenPoint,
   CurvePoint,
   BackgroundStar,
-  LevelData
+  LevelData,
+  HintState,
+  HintTargetEdge
 } from './types';
 import { Renderer } from './renderer';
 import { getLevel, verifyEdge } from './api';
@@ -34,6 +36,7 @@ export class Game {
   private onLevelChange?: (level: LevelData) => void;
   private onProgressChange?: (current: number, total: number) => void;
   private onComplete?: (desc: string) => void;
+  private onHintChange?: (hint: HintState) => void;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -49,7 +52,9 @@ export class Game {
       time: 0,
       showFrequencies: false,
       isComplete: false,
-      snapTargetId: null
+      snapTargetId: null,
+      consecutiveFailures: 0,
+      hint: this.createEmptyHint()
     };
 
     this.resize();
@@ -66,14 +71,24 @@ export class Game {
     };
   }
 
+  private createEmptyHint(): HintState {
+    return {
+      tier: 0,
+      startAnchorId: null,
+      targetEdge: null
+    };
+  }
+
   setCallbacks(callbacks: {
     onLevelChange?: (level: LevelData) => void;
     onProgressChange?: (current: number, total: number) => void;
     onComplete?: (desc: string) => void;
+    onHintChange?: (hint: HintState) => void;
   }): void {
     this.onLevelChange = callbacks.onLevelChange;
     this.onProgressChange = callbacks.onProgressChange;
     this.onComplete = callbacks.onComplete;
+    this.onHintChange = callbacks.onHintChange;
   }
 
   private resize(): void {
@@ -227,8 +242,10 @@ export class Game {
 
         if (result.valid) {
           this.state.completedEdges.add(edgeKey);
+          this.resetHint();
           this.checkCompletion();
         } else {
+          this.recordFailure(startId);
           setTimeout(() => {
             this.removeConnection(startId, endId);
           }, 1500);
@@ -304,6 +321,61 @@ export class Game {
     }
   }
 
+  private isEdgeCompleted(from: string, to: string): boolean {
+    const key = [from, to].sort().join('-');
+    return this.state.completedEdges.has(key);
+  }
+
+  private pickIncompleteEdge(preferredStartId: string | null): HintTargetEdge | null {
+    if (!this.state.levelData) return null;
+
+    const incomplete = this.state.levelData.edges.filter(
+      e => !this.isEdgeCompleted(e.from, e.to)
+    );
+    if (incomplete.length === 0) return null;
+
+    if (preferredStartId) {
+      const involving = incomplete.find(
+        e => e.from === preferredStartId || e.to === preferredStartId
+      );
+      if (involving) return { from: involving.from, to: involving.to };
+    }
+
+    const first = incomplete[0];
+    return { from: first.from, to: first.to };
+  }
+
+  private recordFailure(startId: string): void {
+    if (this.state.isComplete) return;
+
+    this.state.consecutiveFailures += 1;
+    const tier = Math.min(this.state.consecutiveFailures, 3);
+
+    let startAnchorId: string | null = null;
+    let targetEdge: HintTargetEdge | null = null;
+
+    if (tier === 2) {
+      startAnchorId = startId;
+    } else if (tier >= 3) {
+      targetEdge = this.pickIncompleteEdge(startId);
+      if (!targetEdge) {
+        startAnchorId = startId;
+      }
+    }
+
+    this.state.hint = { tier, startAnchorId, targetEdge };
+    this.onHintChange?.(this.state.hint);
+  }
+
+  private resetHint(): void {
+    const wasActive = this.state.hint.tier > 0;
+    this.state.consecutiveFailures = 0;
+    this.state.hint = this.createEmptyHint();
+    if (wasActive) {
+      this.onHintChange?.(this.state.hint);
+    }
+  }
+
   undoLastConnection(): void {
     if (this.state.connections.length === 0 || this.state.isComplete) return;
 
@@ -345,6 +417,7 @@ export class Game {
     this.state.isComplete = false;
     this.state.drawState = this.createEmptyDrawState();
     this.state.snapTargetId = null;
+    this.resetHint();
     this.onProgressChange?.(0, this.state.levelData?.edges.length ?? 0);
   }
 
@@ -371,6 +444,7 @@ export class Game {
     this.state.drawState = this.createEmptyDrawState();
     this.state.snapTargetId = null;
     this.state.showFrequencies = false;
+    this.resetHint();
 
     this.onLevelChange?.(data);
     this.onProgressChange?.(0, data.edges.length);
@@ -442,6 +516,8 @@ export class Game {
 
       this.renderer.drawConnections(this.state.connections, this.state.time);
 
+      this.drawHintAreaLayer();
+
       if (this.state.drawState.isDrawing && this.state.drawState.startAnchorId) {
         const startAnchor = this.state.levelData.anchorPoints.find(
           a => a.id === this.state.drawState.startAnchorId
@@ -472,8 +548,36 @@ export class Game {
         connectedIds
       );
 
+      this.drawHintEndpointLayer();
+
       this.renderer.drawCompletionEffect(this.state.time, this.getProgress());
     }
+  }
+
+  private drawHintAreaLayer(): void {
+    if (!this.state.levelData) return;
+    const hint = this.state.hint;
+    if (hint.tier !== 2 || !hint.startAnchorId) return;
+
+    const anchor = this.state.levelData.anchorPoints.find(a => a.id === hint.startAnchorId);
+    if (!anchor) return;
+
+    const pos = this.renderer.getAnchorScreenPos(anchor, this.state.rotationOffset);
+    this.renderer.drawHintArea(pos, this.state.time);
+  }
+
+  private drawHintEndpointLayer(): void {
+    if (!this.state.levelData) return;
+    const hint = this.state.hint;
+    if (hint.tier < 3 || !hint.targetEdge) return;
+
+    const from = this.state.levelData.anchorPoints.find(a => a.id === hint.targetEdge!.from);
+    const to = this.state.levelData.anchorPoints.find(a => a.id === hint.targetEdge!.to);
+    if (!from || !to) return;
+
+    const fromPos = this.renderer.getAnchorScreenPos(from, this.state.rotationOffset);
+    const toPos = this.renderer.getAnchorScreenPos(to, this.state.rotationOffset);
+    this.renderer.drawHintEndpoints(fromPos, toPos, this.state.time);
   }
 
   private getProgress(): number {
